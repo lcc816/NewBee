@@ -111,14 +111,10 @@ DocumentPath=Project Outputs for NewBee\Design Rule Check - NewBee.html
 DItemRevisionGUID=
 
 [GeneratedDocument2]
-DocumentPath=Project Outputs for NewBee\NewBee.BOM
-DItemRevisionGUID=
-
-[GeneratedDocument3]
 DocumentPath=Project Outputs for NewBee\NewBee.CSV
 DItemRevisionGUID=
 
-[GeneratedDocument4]
+[GeneratedDocument3]
 DocumentPath=Project Outputs for NewBee\Pick Place for NewBee.csv
 DItemRevisionGUID=
 
