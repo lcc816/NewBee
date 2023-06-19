@@ -1,0 +1,7 @@
+[
+ {
+  "path": "/packages/peripherals/ws2812b", 
+  "ver": "latest", 
+  "name": "WS2812B"
+ }
+]
