@@ -1,5 +1,5 @@
 /*******************************************************************************
- * @file     nb_control_thread.c
+ * @file     app_control.c
  * @author   lcc
  * @version
  * @date     2022-08-03
@@ -68,8 +68,8 @@ struct pid pid_roll_rate, pid_pitch_rate, pid_yaw_rate;
 float moto_pwm_1 = 0.0f, moto_pwm_2 = 0.0f, moto_pwm_3 = 0.0f, moto_pwm_4 = 0.0f;
 struct motor_device motor1, motor2, motor3, motor4;
 
-rt_uint8_t g_airplane_status = AIRPLANE_STATUS_LOCK;
-rt_bool_t g_imu_failed = false;
+rt_uint16_t uav_status = 0;
+rt_bool_t imu_failed = false;
 
 //static struct rt_thread control_thread;
 //static char control_thread_stack[1024];
@@ -116,14 +116,14 @@ void pid_position_cal(struct pid *pid, float target, float measure, rt_bool_t in
     pid->p_err = pid->error;
 }
 
-rt_uint8_t nb_control_status_get(void)
+rt_uint16_t nb_control_status_get(void)
 {
-    return g_airplane_status;
+    return uav_status;
 }
 
-void nb_control_status_set(rt_uint8_t status)
+void nb_control_status_set(rt_uint16_t status)
 {
-    g_airplane_status = status;
+    uav_status = status;
 }
 
 void control(struct euler_float *att_in, struct vector3_float *gyros_in,
@@ -178,22 +178,28 @@ void control(struct euler_float *att_in, struct vector3_float *gyros_in,
     motor_set_speed(&motor4, moto_pwm_4);
 }
 
-static void control_recive_thread_entry(void *parameter)
+static void nb_control_recive_thread_entry(void *parameter)
 {
     return;
 }
 
 static void check_airplane_status(void)
 {
-    if (g_imu_failed)
+    rt_bool_t changed = RT_FALSE;
+    if (imu_failed)
     {
-        led_ctrl.led_mode = LED_MODE_IMU_FAIL;
+        if (led_ctrl.led_mode != LED_MODE_IMU_FAIL)
+        {
+            led_ctrl.led_mode = LED_MODE_IMU_FAIL;
+            changed = RT_TRUE;
+        }
     }
-    else if (AIRPLANE_STATUS_LOCK == nb_control_status_get())
+    else if (!(nb_control_status_get() & BIT(UAV_STATUS_FLIGTH_UNLOCK_OFT)))
     {
         if (led_ctrl.led_mode != LED_MODE_FLIGHT_LOCK)
         {
             led_ctrl.led_mode = LED_MODE_FLIGHT_LOCK;
+            changed = RT_TRUE;
         }
     }
     else if (RT_FALSE == nb_remote_comm_ok())
@@ -201,6 +207,7 @@ static void check_airplane_status(void)
         if (led_ctrl.led_mode != LED_MODE_COMM_FAIL)
         {
             led_ctrl.led_mode = LED_MODE_COMM_FAIL;
+            changed = RT_TRUE;
         }
     }
     else
@@ -208,16 +215,17 @@ static void check_airplane_status(void)
         if (led_ctrl.led_mode != LED_MODE_FLIGHT_UNLOCK)
         {
             led_ctrl.led_mode = LED_MODE_FLIGHT_UNLOCK;
+            changed = RT_TRUE;
         }
     }
 
-    if (led_ctrl.irq_sem != RT_NULL)
+    if (changed && (led_ctrl.irq_sem != RT_NULL))
     {
         rt_sem_release(led_ctrl.irq_sem);
     }
 }
 
-static void control_thread_entry(void *parameter)
+static void nb_control_main_thread_entry(void *parameter)
 {
     rt_err_t result = 0;
     struct euler_float angles;
@@ -242,14 +250,17 @@ static void control_thread_entry(void *parameter)
     {
         LOG_E("rt_mpu6050_init failed");
         led_ctrl.led_mode = LED_MODE_RUN_ERROR;
-        //rt_sem_release(led_ctrl.irq_sem);
+        if (led_ctrl.irq_sem != RT_NULL)
+            rt_sem_release(led_ctrl.irq_sem);
 
         return;
     }
 
-    LOG_D("rt_mpu6050_init OK");
+    LOG_E("rt_mpu6050_init OK");
+
     led_ctrl.led_mode = LED_MODE_FLIGHT_LOCK;
-    //rt_sem_release(led_ctrl.irq_sem);
+    if (led_ctrl.irq_sem != RT_NULL)
+        rt_sem_release(led_ctrl.irq_sem);
 
     while (1) {
         rt_get_uptime_ms(&timestamp);
@@ -260,7 +271,7 @@ static void control_thread_entry(void *parameter)
         {
             /* interrupt happened */
             rt_mpu_update(&angles, &gyros);
-            g_imu_failed = RT_FALSE;
+            imu_failed = RT_FALSE;
             // LOG_D("angles: %d %d %d, gyros: %d %d %d",
             //       (int)angles.pitch, (int)angles.roll, (int)angles.yaw,
             //       (int)gyros.x, (int)gyros.y, (int)gyros.z);
@@ -268,13 +279,13 @@ static void control_thread_entry(void *parameter)
         else
         {
             /* mpu 数据获取超时 */
-            g_imu_failed = RT_TRUE;
+            imu_failed = RT_TRUE;
             //rt_thread_delay(300);
             LOG_E("rt_mpu6050_update failed");
         }
 
-        if (!g_imu_failed
-            && nb_control_status_get() == LED_MODE_FLIGHT_UNLOCK
+        if (!imu_failed
+            && !(nb_control_status_get() & BIT(UAV_STATUS_FLIGTH_UNLOCK_OFT))
             && nb_remote_comm_ok() == RT_TRUE)
         {
             airplane_enable = RT_TRUE;
@@ -296,7 +307,7 @@ static int control_app_init(void)
     rt_thread_t tid;
 
     tid = rt_thread_create("control_recv_thread",
-                           control_recive_thread_entry, RT_NULL,
+                           nb_control_recive_thread_entry, RT_NULL,
                            1024,
                            25,
                            5);
@@ -311,7 +322,7 @@ static int control_app_init(void)
     }
 
     tid = rt_thread_create("control_thread",
-                           control_thread_entry, RT_NULL,
+                           nb_control_main_thread_entry, RT_NULL,
                            3072,  /* stack size */
                            22,    /* priority */
                            5);    /* time slice */
