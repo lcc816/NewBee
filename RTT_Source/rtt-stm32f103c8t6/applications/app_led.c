@@ -1,5 +1,5 @@
 /*******************************************************************************
- * @file     nb_led_ctrl_thread.c
+ * @file     app_led.c
  * @author   lcc
  * @version  
  * @date     2022-07-09
@@ -60,21 +60,26 @@ static void nb_ws2812_spi_init(void)
 //    ws2812_send(ws2812);
 //}
 
+void nb_led_ticks_timeout(void *parameter)
+{
+    rich_led_action_ticks();
+}
+
 static void led_mode_set(void)
 {
     switch (led_ctrl.led_mode)
     {
     case LED_MODE_FLIGHT_LOCK:
-        led_action_set(ACTION_ID_AIRPLANE_LOCK);
+        rich_led_action_set(ACTION_ID_AIRPLANE_LOCK);
         break;
     case LED_MODE_FLIGHT_UNLOCK:
-        led_action_set(ACTION_ID_AIRPLANE_UNLOCK);
+        rich_led_action_set(ACTION_ID_AIRPLANE_UNLOCK);
         break;
     case LED_MODE_RUN_ERROR:
-        led_action_set(ACTION_ID_SYSTEM_ERROR);
+        rich_led_action_set(ACTION_ID_SYSTEM_ERROR);
         break;
     case LED_MODE_COMM_FAIL:
-        led_action_set(ACTION_ID_AIRPLANE_DISCONNECTED);
+        rich_led_action_set(ACTION_ID_AIRPLANE_DISCONNECTED);
         break;
     default:
         break;
@@ -83,7 +88,7 @@ static void led_mode_set(void)
 
 void nb_led_ctrl_thread_entry(void *parameter)
 {
-    led_instance_init();
+    rich_led_instance_init();
     led_mode_set();
     nb_ws2812_spi_init();
     ws2812_t ws2812 = ws2812_create(NB_WS2812B_SPI_DEV_NAME,
@@ -93,6 +98,8 @@ void nb_led_ctrl_thread_entry(void *parameter)
         LOG_E("create ws2812 object faild.\r\n");
         return;
     }
+
+    LOG_E("led ctrl init ok");
 
     //nb_ws2812_test(ws2812);
 
@@ -107,14 +114,28 @@ void nb_led_ctrl_thread_entry(void *parameter)
     }
 }
 
-static int led_ctrl_app_init(void)
+static int led_app_init(void)
 {
     rt_thread_t tid;
+    rt_timer_t timer;
 
     led_ctrl.led_mode = LED_MODE_FLIGHT_LOCK;
     led_ctrl.irq_sem = rt_sem_create("led_irq", 0, RT_IPC_FLAG_FIFO);
     if (led_ctrl.irq_sem == NULL) {
         LOG_E("failed to alloc irq sem");
+        return -1;
+    }
+
+    timer = rt_timer_create("led_ticks_timer", nb_led_ticks_timeout,
+                            RT_NULL, 1,
+                            RT_TIMER_FLAG_PERIODIC);
+
+    if (timer != RT_NULL)
+    {
+        rt_timer_start(timer);
+    }
+    else
+    {
         return -1;
     }
 
@@ -125,12 +146,12 @@ static int led_ctrl_app_init(void)
     if (tid != RT_NULL)
     {
         rt_thread_startup(tid);
-        return 0;
     }
     else
     {
         return -1;
     }
+    return 0;
 }
 
-INIT_DEVICE_EXPORT(led_ctrl_app_init);
+INIT_DEVICE_EXPORT(led_app_init);

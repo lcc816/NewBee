@@ -10,14 +10,14 @@
 #include <stdbool.h>
 #include "conf_led.h"
 
-struct led_config
+struct rich_led_config
 {
     void (*hal_gpio_init)(void);
     void (*hal_led_on)(void);
     void (*hal_led_off)(void);
 };
 
-struct led_action
+struct rich_led_action
 {
     uint32_t led_id;
     int16_t  duration;
@@ -26,7 +26,7 @@ struct led_action
     uint8_t  pulse_num_per_cycle;
 };
 
-struct led_action_record
+struct rich_led_record
 {
     uint32_t action_id;
     uint16_t ticks;
@@ -35,14 +35,14 @@ struct led_action_record
     uint8_t action_changed;
 };
 
-enum led_state
+enum rich_led_state
 {
     LED_STATE_OFF = 0,
     LED_STATE_ON = 1
 };
 
-void led_instance_init(void);
+void rich_led_instance_init(void);
 
-void led_action_set(uint32_t action_id);
+void rich_led_action_set(uint32_t action_id);
 
-void action_ticks(void);
+void rich_led_action_ticks(void);

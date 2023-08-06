@@ -22,14 +22,14 @@
 #define LED_ASSERT(expr) ((void)0)
 #endif
 
-extern struct led_action action_instance[];
-extern struct led_config led_instance[];
-extern struct led_action_record action_record[NUM_LED_ID];
+extern struct rich_led_action action_instance[];
+extern struct rich_led_config led_instance[];
+extern struct rich_led_record action_record[NUM_LED_ID];
 
-void led_instance_init(void)
+void rich_led_instance_init(void)
 {
     int i;
-    struct led_action *act;
+    struct rich_led_action *act;
     for (i = 0; i <= LED_ID_MAX; i++)
     {
         led_instance[i].hal_gpio_init();
@@ -48,7 +48,7 @@ void led_instance_init(void)
     }
 }
 
-void led_action_set(uint32_t action_id)
+void rich_led_action_set(uint32_t action_id)
 {
     uint32_t led_id;
 
@@ -78,11 +78,11 @@ void led_action_turn_off_all(void)
     }
 }
 
-void action_ticks(void)
+void rich_led_action_ticks(void)
 {
     int i;
-    struct led_action *action;
-    struct led_action_record *record;
+    struct rich_led_action *action;
+    struct rich_led_record *record;
     uint16_t pulse;
     bool state_changed;
     for (i = 0; i <= LED_ID_MAX; i++)

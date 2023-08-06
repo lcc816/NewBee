@@ -9,13 +9,13 @@
 #include "rich_led.h"
 #include "led.h"
 
-struct led_config led_instance[NUM_LED_ID] =
+struct rich_led_config led_instance[NUM_LED_ID] =
 {
     [LED_ID_GREEN] = {nb_led_init, nb_led_on, nb_led_off},
     //[LED_ID_BLUE] = {led_blue_gpio_init, led_blue_on, led_blue_off}
 };
 
-struct led_action action_instance[] =
+struct rich_led_action action_instance[] =
 {
     [ACTION_ID_SYSTEM_ERROR] = {LED_ID_GREEN, 500, 250, 250, 1},
     [ACTION_ID_AIRPLANE_DISCONNECTED] = {LED_ID_GREEN, 1000, 100, 100, 3},
@@ -25,4 +25,4 @@ struct led_action action_instance[] =
     [ACTION_ID_IMU_ERROR] = {LED_ID_GREEN, 1000, 150, 150, 2},
 };
 
-struct led_action_record action_record[NUM_LED_ID];
+struct rich_led_record action_record[NUM_LED_ID];
