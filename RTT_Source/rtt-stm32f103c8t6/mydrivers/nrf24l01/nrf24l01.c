@@ -159,7 +159,7 @@ static void _clear_status_flags(struct rf24_device *dev)
 }
 
 static void _transmit_with_padding(struct rf24_device *dev, uint8_t *tx_buf,
-                                uint8_t len, uint8_t padding_len)
+                                   uint8_t len, uint8_t padding_len)
 {
     struct rt_spi_message msg1, msg2, msg3;
     uint8_t pad[32] = {0};
@@ -555,6 +555,7 @@ void rf24_set_to_rx_mode(struct rf24_device *dev)
 
     config_reg |= BIT(RF24_SHIFT_PRIM_RX);
     _spi_write_reg(dev, RF24_REG_CONFIG, config_reg);
+    _flush_rx(dev);
     _clear_status_flags(dev);
     _ce_high(dev);
 
@@ -618,13 +619,14 @@ rt_err_t rf24_transmit_packet(struct rf24_device *dev, uint8_t *tx_buf, uint8_t 
     // Start transmission
     _ce_high(dev);
 
-    timeout = 30;
+    timeout = dev->config.retry_delay * dev->config.repeat_cnt / 100 + 1;
     do
     {
         status = _spi_read_reg(dev, RF24_REG_STATUS);
         /* Maximum number of TX retransmits reached */
         if (status & BIT(RF24_SHIFT_MAX_RT))
         {
+            /* Maximum number of TX retransmits reached */
             _flush_tx(dev);
             /* Clear interrupt to enable further communication */
             _spi_write_reg(dev, RF24_REG_STATUS, BIT(RF24_SHIFT_MAX_RT));
@@ -632,6 +634,7 @@ rt_err_t rf24_transmit_packet(struct rf24_device *dev, uint8_t *tx_buf, uint8_t 
         }
         if (status & BIT(RF24_SHIFT_TX_DS))
         {
+            _spi_write_reg(dev, RF24_REG_STATUS, BIT(RF24_SHIFT_TX_DS));
             return STATUS_OK;
         }
         rt_hw_us_delay(100);
@@ -715,14 +718,18 @@ void rf24_run(struct rf24_device *dev)
 
     if (status & BIT(RF24_SHIFT_RX_DR))
     {
-        uint8_t pipe = (status >> RF24_SHIFT_RX_P_NO) & 0x7;
-        uint8_t data[32];
-        uint8_t len = rf24_get_data(dev, data);
-        if (len > 0 && dev->cb.rx_ind != NULL)
+        do
         {
-            LOG_D("received %u bytes", len);
-            dev->cb.rx_ind(dev, data, len, pipe);
-        }
+            uint8_t pipe = (status >> RF24_SHIFT_RX_P_NO) & 0x7;
+            uint8_t data[32];
+            uint8_t len = rf24_get_data(dev, data);
+            if (len > 0 && dev->cb.rx_ind != NULL)
+            {
+                LOG_D("received %u bytes", len);
+                dev->cb.rx_ind(dev, data, len, pipe);
+            }
+            /* !!important: the RX FIFO may not be empty after a single read */
+        } while (!(_spi_read_reg(dev, RF24_REG_FIFO_STATUS) & BIT(RF24_SHIFT_RX_EMPTY)));
         _spi_write_reg(dev, RF24_REG_STATUS, BIT(RF24_SHIFT_RX_DR));
     }
 
