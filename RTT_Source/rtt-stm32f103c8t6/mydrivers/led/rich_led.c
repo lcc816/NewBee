@@ -93,6 +93,7 @@ void rich_led_action_ticks(void)
             record->action_changed = 0;
             record->pulse_cnt = 0;
             record->ticks = 0;
+            record->current_state = LED_STATE_OFF;
             led_instance[i].hal_led_off();
             DEBUG_PRINT("led %d switch action\r\n", i);
         }
