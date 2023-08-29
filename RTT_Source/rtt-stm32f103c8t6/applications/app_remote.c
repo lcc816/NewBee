@@ -26,6 +26,13 @@ struct msg_header
     uint8_t opcode;
 } __attribute__ ((packed));
 
+struct msg_onoff
+{
+    struct msg_header head;
+    uint8_t unlock;
+    uint8_t sum;
+} __attribute__ ((packed));
+
 struct msg_keymap
 {
     struct msg_header head;
@@ -96,6 +103,36 @@ static uint8_t calc_sum(void *buf, int len)
     return sum;
 }
 
+static void _process_remote_onoff(struct msg_onoff *msg)
+{
+    uint16_t control_status = nb_control_status_get();
+    struct msg_status status;
+
+    if (msg->unlock)
+    {
+        /* unlock */
+        control_status |= BIT(UAV_STATUS_FLIGTH_UNLOCK_OFT);
+        nb_control_status_set(control_status);
+        LOG_D("airplane unlocked");
+    }
+    else
+    {
+        /* lock airplane */
+        control_status &= ~BIT(UAV_STATUS_FLIGTH_UNLOCK_OFT);
+        nb_control_status_set(control_status);
+        LOG_D("airplane locked");
+    }
+
+    status.head.sn = tx_sn++;
+    status.head.len = sizeof(status);
+    status.head.opcode = 0x80;
+    status.status = nb_control_status_get();
+    status.sum = calc_sum(&status, sizeof(status) - 1);
+    rf24_set_to_tx_mode(si24r1);
+    rf24_transmit_packet(si24r1, (void *)&status, sizeof(status));
+    rf24_set_to_rx_mode(si24r1);
+}
+
 struct remote_control rc_in;
 
 static void _process_remote_joystick(struct msg_joystick *msg)
@@ -125,9 +162,7 @@ rt_bool_t nb_remote_comm_ok(void)
 
 enum key_index
 {
-    KEY_WKUP = 0,
-    KEY_1,
-    KEY_UP,
+    KEY_UP = 0,
     KEY_DOWN,
     KEY_LEFT,
     KEY_RIGHT,
@@ -141,24 +176,6 @@ static void _process_remote_key(struct msg_keymap *msg)
 #if DBG_LVL >= DBG_LOG
     rt_kprintf("keymap %04x\n", keymap);
 #endif
-    if (keymap & BIT(KEY_1))
-    {
-        uint16_t status = nb_control_status_get();
-        if (status & BIT(UAV_STATUS_FLIGTH_UNLOCK_OFT))
-        {
-            /* lock airplane */
-            status &= ~BIT(UAV_STATUS_FLIGTH_UNLOCK_OFT);
-            nb_control_status_set(status);
-            LOG_D("airplane locked");
-        }
-        else
-        {
-            /* unlock */
-            status |= BIT(UAV_STATUS_FLIGTH_UNLOCK_OFT);
-            nb_control_status_set(status);
-            LOG_D("airplane unlocked");
-        }
-    }
     if (keymap & BIT(KEY_UP))
         ;
     if (keymap & BIT(KEY_DOWN))
@@ -180,25 +197,35 @@ static void _process_remote_key(struct msg_keymap *msg)
 
 static void rf24_rx_hdl(struct rf24_device *dev, uint8_t *data, uint8_t len, int pipe)
 {
+    struct msg_header *head;
 #if DBG_LVL >= DBG_LOG
     // for debug...
     for (int i = 0; i < len; i++)
         rt_kprintf("%02x ", data[i]);
     rt_kprintf("\n");
 #endif
+    if (len < 5)
+        return;
+
+    head = (void *)data;
+    if (head->len == 0)
+        return;
+    if (rx_sn == head->sn)
+        return;
+
     if (_check_crc(data, len))
     {
-        struct msg_header *head = (void *)data;
         rx_sn = head->sn;
         switch (head->opcode)
         {
+        case 0x00:
+            _process_remote_onoff((void *)data);
+            break;
         case 0x01:
             _process_remote_joystick((void *)data);
             break;
         case 0x02:
             _process_remote_key((void *)data);
-            break;
-        case 0x00:
             break;
         default:
             break;
@@ -222,7 +249,7 @@ void nb_remote_comm_thread_entry(void *parameter)
     cfg.power_ext = RT_TRUE;
     cfg.channel = 52;
     cfg.data_rate = RF24_250KBPS;
-    cfg.power_level = RF24_PWR_LVL1;
+    cfg.power_level = RF24_PWR_LVL2;
     cfg.payload_len = 0; // 0 means dynamic length
     rf24_config(si24r1, &cfg);
 
