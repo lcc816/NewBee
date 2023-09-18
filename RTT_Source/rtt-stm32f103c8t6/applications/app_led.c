@@ -75,6 +75,9 @@ static void led_mode_set(void)
     case LED_MODE_FLIGHT_UNLOCK:
         rich_led_action_set(ACTION_ID_AIRPLANE_UNLOCK);
         break;
+    case LED_MODE_STARTING:
+        rich_led_action_set(ACTION_ID_SYSTEM_STARTING);
+        break;
     case LED_MODE_RUN_ERROR:
         rich_led_action_set(ACTION_ID_SYSTEM_ERROR);
         break;

@@ -24,6 +24,7 @@
 #define LED_MODE_RUN_ERROR      2
 #define LED_MODE_IMU_FAIL       3
 #define LED_MODE_COMM_FAIL      4
+#define LED_MODE_STARTING       5
 
 #define UAV_STATUS_FLIGTH_UNLOCK_OFT    0
 #define UAV_STATUS_IMU_ERROR_OFT        1

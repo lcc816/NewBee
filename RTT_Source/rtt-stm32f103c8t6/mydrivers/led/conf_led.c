@@ -17,6 +17,7 @@ struct rich_led_config led_instance[NUM_LED_ID] =
 
 struct rich_led_action action_instance[] =
 {
+    [ACTION_ID_SYSTEM_STARTING] = {LED_ID_GREEN, 150, 50, 100, 1},
     [ACTION_ID_SYSTEM_ERROR] = {LED_ID_GREEN, 500, 250, 250, 1},
     [ACTION_ID_AIRPLANE_DISCONNECTED] = {LED_ID_GREEN, 1000, 100, 100, 3},
     [ACTION_ID_AIRPLANE_UNLOCK] = {LED_ID_GREEN, -1, 0, 1, 1},

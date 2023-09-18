@@ -227,13 +227,17 @@ static void check_airplane_status(void)
 
 static void nb_control_main_thread_entry(void *parameter)
 {
-    rt_err_t result = 0;
+    // rt_err_t result = 0;
     struct euler_float angles;
     struct vector3_float gyros;
     struct remote_control rc_in;
     rt_bool_t airplane_enable;
 
     unsigned long timestamp;
+
+    led_ctrl.led_mode = LED_MODE_STARTING;
+    if (led_ctrl.irq_sem != RT_NULL)
+        rt_sem_release(led_ctrl.irq_sem);
 
     if (motor_init(&motor1, "pwm3", 1, 500000, 4096) ||
         motor_init(&motor2, "pwm3", 2, 500000, 4096) ||
@@ -245,15 +249,9 @@ static void nb_control_main_thread_entry(void *parameter)
     }
 
     /* DMP 的中断频率设置为100Hz, 并以此频率驱动控制算法  */
-    result = rt_mpu_init("i2c1", NB_MPU6050_IND_PIN, RT_TRUE, 100);
-    if (result < 0)
-    {
-        LOG_E("rt_mpu6050_init failed");
-        led_ctrl.led_mode = LED_MODE_RUN_ERROR;
-        if (led_ctrl.irq_sem != RT_NULL)
-            rt_sem_release(led_ctrl.irq_sem);
-
-        return;
+    while (rt_mpu_init("i2c1", NB_MPU6050_IND_PIN, RT_TRUE, 100) < 0) {
+        LOG_E("try to init mpu6050 failed");
+        rt_thread_mdelay(500);
     }
 
     LOG_E("rt_mpu6050_init OK");
@@ -285,7 +283,7 @@ static void nb_control_main_thread_entry(void *parameter)
         }
 
         if (!imu_failed
-            && !(nb_control_status_get() & BIT(UAV_STATUS_FLIGTH_UNLOCK_OFT))
+            && (nb_control_status_get() & BIT(UAV_STATUS_FLIGTH_UNLOCK_OFT))
             && nb_remote_comm_ok() == RT_TRUE)
         {
             airplane_enable = RT_TRUE;
